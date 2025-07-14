@@ -32,12 +32,27 @@ if [ "$(docker ps -q -a -f name=$REDIS_CONTAINER_NAME)" ]; then
   exit 0
 fi
 
+# Check if .env file exists, create one if it doesn't
+if [ ! -f .env ]; then
+  echo "Creating .env file with default Redis configuration..."
+  cat > .env << EOF
+REDIS_URL=redis://:redis-pw@localhost:6379
+EOF
+fi
+
 # import env variables from .env
 set -a
 source .env
 
-REDIS_PASSWORD=$(echo "$REDIS_URL" | awk -F':' '{print $3}' | awk -F'@' '{print $1}')
-REDIS_PORT=$(echo "$REDIS_URL" | awk -F':' '{print $4}' | awk -F'\/' '{print $1}')
+# Extract Redis password and port from REDIS_URL
+if [ -z "$REDIS_URL" ]; then
+  echo "REDIS_URL not found in .env file. Using defaults..."
+  REDIS_PASSWORD="redis-pw"
+  REDIS_PORT="6379"
+else
+  REDIS_PASSWORD=$(echo "$REDIS_URL" | awk -F':' '{print $3}' | awk -F'@' '{print $1}')
+  REDIS_PORT=$(echo "$REDIS_URL" | awk -F':' '{print $4}' | awk -F'\/' '{print $1}')
+fi
 
 if [ "$REDIS_PASSWORD" == "redis-pw" ]; then
   echo "You are using the default Redis password"
@@ -51,9 +66,12 @@ if [ "$REDIS_PASSWORD" == "redis-pw" ]; then
   sed -i -e "s#:redis-pw@#:$REDIS_PASSWORD@#" .env
 fi
 
+echo "Starting Redis container with password: $REDIS_PASSWORD on port: $REDIS_PORT"
+
 docker run -d \
   --name $REDIS_CONTAINER_NAME \
   -p "$REDIS_PORT":6379 \
-  redis \
-  /bin/sh -c "redis-server --requirepass $REDIS_PASSWORD" \
-  && echo "Redis container '$REDIS_CONTAINER_NAME' was successfully created"
+  redis:alpine \
+  redis-server --requirepass "$REDIS_PASSWORD" \
+  && echo "Redis container '$REDIS_CONTAINER_NAME' was successfully created" \
+  || echo "Failed to start Redis container. Check Docker logs with: docker logs $REDIS_CONTAINER_NAME"
