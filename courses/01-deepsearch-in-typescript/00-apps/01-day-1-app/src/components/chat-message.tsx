@@ -1,7 +1,10 @@
 import ReactMarkdown, { type Components } from "react-markdown";
+import type { Message } from "ai";
+
+export type MessagePart = NonNullable<Message["parts"]>[number];
 
 interface ChatMessageProps {
-  text: string;
+  parts: MessagePart[];
   role: string;
   userName: string;
 }
@@ -38,7 +41,46 @@ const Markdown = ({ children }: { children: string }) => {
   return <ReactMarkdown components={components}>{children}</ReactMarkdown>;
 };
 
-export const ChatMessage = ({ text, role, userName }: ChatMessageProps) => {
+const ToolInvocationDisplay = ({
+  part,
+}: {
+  part: MessagePart & { type: "tool-invocation" };
+}) => {
+  const { toolInvocation } = part;
+
+  return (
+    <div className="mb-4 rounded-lg bg-gray-600 p-3">
+      <div className="mb-2">
+        <span className="text-sm font-semibold text-gray-300">
+          🔧 Tool: {toolInvocation.toolName}
+        </span>
+        <span className="ml-2 text-xs text-gray-400">
+          ({toolInvocation.state})
+        </span>
+      </div>
+
+      {toolInvocation.state !== "partial-call" && (
+        <div className="mb-2">
+          <div className="mb-1 text-xs text-gray-400">Arguments:</div>
+          <pre className="overflow-x-auto rounded bg-gray-700 p-2 text-xs">
+            {JSON.stringify(toolInvocation.args, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {toolInvocation.state === "result" && "result" in toolInvocation && (
+        <div>
+          <div className="mb-1 text-xs text-gray-400">Result:</div>
+          <pre className="overflow-x-auto rounded bg-gray-700 p-2 text-xs">
+            {JSON.stringify(toolInvocation.result, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const ChatMessage = ({ parts, role, userName }: ChatMessageProps) => {
   const isAI = role === "assistant";
 
   return (
@@ -53,7 +95,21 @@ export const ChatMessage = ({ text, role, userName }: ChatMessageProps) => {
         </p>
 
         <div className="prose prose-invert max-w-none">
-          <Markdown>{text}</Markdown>
+          {parts.map((part, index) => {
+            switch (part.type) {
+              case "text":
+                return <Markdown key={index}>{part.text}</Markdown>;
+              case "tool-invocation":
+                return <ToolInvocationDisplay key={index} part={part} />;
+              default:
+                // For any other part types we're not handling yet
+                return (
+                  <div key={index} className="text-xs italic text-gray-500">
+                    Unsupported part type: {(part as any).type}
+                  </div>
+                );
+            }
+          })}
         </div>
       </div>
     </div>
