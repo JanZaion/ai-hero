@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 
@@ -10,8 +11,28 @@ interface ChatProps {
 }
 
 export const ChatPage = ({ userName }: ChatProps) => {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat();
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error } =
+    useChat({
+      onError: (error) => {
+        // Check if the error message contains rate limit information
+        if (
+          error.message.includes("Rate limit exceeded") ||
+          error.message.includes("429")
+        ) {
+          try {
+            const errorData = JSON.parse(error.message);
+            toast.error(
+              errorData.message ||
+                "Rate limit exceeded. Please try again tomorrow.",
+            );
+          } catch {
+            toast.error("Rate limit exceeded. Please try again tomorrow.");
+          }
+        } else {
+          toast.error("An error occurred. Please try again.");
+        }
+      },
+    });
 
   return (
     <>
