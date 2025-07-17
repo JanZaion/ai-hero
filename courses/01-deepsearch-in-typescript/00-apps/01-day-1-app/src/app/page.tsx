@@ -1,22 +1,49 @@
 import { PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { auth } from "~/server/auth/index.ts";
+import { getChats, getChat } from "~/server/db/queries";
 import { ChatPage } from "./chat.tsx";
 import { AuthButton } from "../components/auth-button.tsx";
+import type { Message } from "ai";
 
-const chats = [
-  {
-    id: "1",
-    title: "My First Chat",
-  },
-];
-
-const activeChatId = "1";
-
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>;
+}) {
+  const { id } = await searchParams;
   const session = await auth();
   const userName = session?.user?.name ?? "Guest";
   const isAuthenticated = !!session?.user;
+
+  // Fetch chats for the sidebar
+  const chats = isAuthenticated ? await getChats(session.user.id) : [];
+
+  // Use stable chatId - either from URL or generate new one
+  const chatId = id ?? crypto.randomUUID();
+  const isNewChat = !id;
+
+  // Fetch specific chat if id is provided
+  let initialMessages: Message[] = [];
+  if (id && isAuthenticated) {
+    const chat = await getChat(id, session.user.id);
+    if (chat) {
+      initialMessages = chat.messages.map((msg) => ({
+        id: msg.id,
+        // msg.role is typed as string, so we
+        // need to cast it to the correct type
+        role: msg.role as "user" | "assistant",
+        // msg.parts is typed as unknown[], so we
+        // need to cast it to the correct type
+        parts: msg.parts as Message["parts"],
+        // content is not persisted, so we can
+        // safely pass an empty string, because
+        // parts are always present, and the AI SDK
+        // will use the parts to construct the content
+        content: "",
+      }));
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -41,9 +68,9 @@ export default async function HomePage() {
             chats.map((chat) => (
               <div key={chat.id} className="flex items-center gap-2">
                 <Link
-                  href={`/?chatId=${chat.id}`}
+                  href={`/?id=${chat.id}`}
                   className={`flex-1 rounded-lg p-3 text-left text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                    chat.id === activeChatId
+                    chat.id === id
                       ? "bg-gray-700"
                       : "hover:bg-gray-750 bg-gray-800"
                   }`}
@@ -70,7 +97,13 @@ export default async function HomePage() {
 
       {/* Main Content */}
       {isAuthenticated ? (
-        <ChatPage userName={userName} />
+        <ChatPage
+          key={chatId}
+          userName={userName}
+          chatId={chatId}
+          isNewChat={isNewChat}
+          initialMessages={initialMessages}
+        />
       ) : (
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">

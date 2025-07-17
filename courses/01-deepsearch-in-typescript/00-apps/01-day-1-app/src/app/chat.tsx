@@ -2,57 +2,97 @@
 
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { toast } from "sonner";
+import { StickToBottom } from "use-stick-to-bottom";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
+import { isNewChatCreated } from "~/utils";
+import type { Message } from "ai";
 
 interface ChatProps {
   userName: string;
+  chatId: string;
+  isNewChat: boolean;
+  initialMessages?: Message[];
 }
 
-export const ChatPage = ({ userName }: ChatProps) => {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error } =
-    useChat({
-      onError: (error) => {
-        // Check if the error message contains rate limit information
-        if (
-          error.message.includes("Rate limit exceeded") ||
-          error.message.includes("429")
-        ) {
-          try {
-            const errorData = JSON.parse(error.message);
-            toast.error(
-              errorData.message ||
-                "Rate limit exceeded. Please try again tomorrow.",
-            );
-          } catch {
-            toast.error("Rate limit exceeded. Please try again tomorrow.");
-          }
-        } else {
-          toast.error("An error occurred. Please try again.");
+export const ChatPage = ({
+  userName,
+  chatId,
+  isNewChat,
+  initialMessages,
+}: ChatProps) => {
+  const router = useRouter();
+
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    error,
+    data,
+  } = useChat({
+    initialMessages,
+    body: {
+      chatId,
+      isNewChat,
+    },
+    onError: (error) => {
+      // Check if the error message contains rate limit information
+      if (
+        error.message.includes("Rate limit exceeded") ||
+        error.message.includes("429")
+      ) {
+        try {
+          const errorData = JSON.parse(error.message);
+          toast.error(
+            errorData.message ||
+              "Rate limit exceeded. Please try again tomorrow.",
+          );
+        } catch {
+          toast.error("Rate limit exceeded. Please try again tomorrow.");
         }
-      },
-    });
+      } else {
+        toast.error("An error occurred. Please try again.");
+      }
+    },
+  });
+
+  // Handle redirect when a new chat is created
+  useEffect(() => {
+    const lastDataItem = data?.[data.length - 1];
+
+    if (lastDataItem && isNewChatCreated(lastDataItem)) {
+      router.push(`?id=${lastDataItem.chatId}`);
+    }
+  }, [data, router]);
 
   return (
     <>
       <div className="flex flex-1 flex-col">
-        <div
-          className="mx-auto w-full max-w-[65ch] flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500"
+        <StickToBottom
+          className="mx-auto w-full max-w-[65ch] flex-1 overflow-y-auto p-4 [&>div]:scrollbar-thin [&>div]:scrollbar-track-gray-800 [&>div]:scrollbar-thumb-gray-600 [&>div]:hover:scrollbar-thumb-gray-500"
+          resize="smooth"
+          initial="smooth"
           role="log"
           aria-label="Chat messages"
         >
-          {messages.map((message, index) => {
-            return (
-              <ChatMessage
-                key={message.id || index}
-                parts={message.parts || []}
-                role={message.role}
-                userName={userName}
-              />
-            );
-          })}
-        </div>
+          <StickToBottom.Content className="flex flex-col gap-4">
+            {messages.map((message, index) => {
+              return (
+                <ChatMessage
+                  key={message.id || index}
+                  parts={message.parts || []}
+                  role={message.role}
+                  userName={userName}
+                />
+              );
+            })}
+          </StickToBottom.Content>
+        </StickToBottom>
 
         <div className="border-t border-gray-700">
           <form onSubmit={handleSubmit} className="mx-auto max-w-[65ch] p-4">

@@ -1,6 +1,7 @@
-import { and, count, eq, gte } from "drizzle-orm";
+import { and, count, eq, gte, desc, asc } from "drizzle-orm";
 import { db } from "./index";
-import { userRequests, users } from "./schema";
+import { userRequests, users, chats, messages } from "./schema";
+import type { Message } from "ai";
 
 const DAILY_REQUEST_LIMIT = 100; // Adjust this value as needed
 
@@ -60,3 +61,107 @@ export async function checkRateLimit(userId: string): Promise<{
     limit: DAILY_REQUEST_LIMIT,
   };
 }
+
+export const upsertChat = async (opts: {
+  userId: string;
+  chatId: string;
+  title: string;
+  messages: Message[];
+}) => {
+  const { userId, chatId, title, messages: messageList } = opts;
+
+  // Check if chat exists and belongs to user
+  const existingChat = await db
+    .select({ id: chats.id })
+    .from(chats)
+    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+    .limit(1);
+
+  if (existingChat.length > 0) {
+    // Chat exists, delete all existing messages and replace them
+    await db.delete(messages).where(eq(messages.chatId, chatId));
+
+    // Update chat title and timestamp
+    await db
+      .update(chats)
+      .set({
+        title,
+        updatedAt: new Date(),
+      })
+      .where(eq(chats.id, chatId));
+  } else {
+    // Create new chat
+    await db.insert(chats).values({
+      id: chatId,
+      userId,
+      title,
+    });
+  }
+
+  // Insert all messages
+  if (messageList.length > 0) {
+    const messageValues = messageList.map((message, index) => ({
+      id: message.id,
+      chatId,
+      role: message.role,
+      parts: message.parts,
+      order: index,
+    }));
+
+    await db.insert(messages).values(messageValues);
+  }
+};
+
+export const getChat = async (chatId: string, userId: string) => {
+  const chat = await db
+    .select({
+      id: chats.id,
+      title: chats.title,
+      createdAt: chats.createdAt,
+      updatedAt: chats.updatedAt,
+    })
+    .from(chats)
+    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)))
+    .limit(1);
+
+  if (chat.length === 0) {
+    return null;
+  }
+
+  const chatMessages = await db
+    .select({
+      id: messages.id,
+      role: messages.role,
+      parts: messages.parts,
+      order: messages.order,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .where(eq(messages.chatId, chatId))
+    .orderBy(asc(messages.order));
+
+  return {
+    ...chat[0],
+    messages: chatMessages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      parts: msg.parts,
+      createdAt: msg.createdAt,
+    })),
+  };
+};
+
+export const getChats = async (userId: string) => {
+  const userChats = await db
+    .select({
+      id: chats.id,
+      title: chats.title,
+      createdAt: chats.createdAt,
+      updatedAt: chats.updatedAt,
+    })
+    .from(chats)
+    .where(eq(chats.userId, userId))
+    .orderBy(desc(chats.updatedAt));
+
+  return userChats;
+};
