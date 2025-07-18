@@ -77,6 +77,8 @@ export async function POST(request: Request) {
         });
       }
 
+      const currentDate = new Date().toISOString();
+
       const result = streamText({
         model,
         messages,
@@ -88,7 +90,11 @@ export async function POST(request: Request) {
             langfuseTraceId: trace.id,
           },
         },
-        system: `You are a helpful AI assistant with access to real-time web search and web scraping capabilities. When answering questions:
+        system: `You are a helpful AI assistant with access to real-time web search and web scraping capabilities. 
+
+CURRENT DATE AND TIME: ${currentDate}
+
+When answering questions:
 
 1. Always search the web for up-to-date information when relevant
 2. ALWAYS format URLs as markdown links using the format [title](url)
@@ -96,15 +102,19 @@ export async function POST(request: Request) {
 4. If you're unsure about something, search the web to verify
 5. When providing information, always include the source where you found it using markdown links
 6. Never include raw URLs - always use markdown link format
+7. When users ask for "up to date" or "current" information, use the current date (${currentDate}) to determine what constitutes recent information
+8. Pay attention to publication dates in search results and prioritize more recent information when available
+9. If information seems outdated compared to the current date, mention this to the user
 
 Available tools:
-- searchWeb: Use this to search for current information on the web. Returns search results with titles, links, and snippets.
+- searchWeb: Use this to search for current information on the web. Returns search results with titles, links, snippets, and publication dates when available.
 - scrapePages: Use this to extract the full content of web pages. This is useful when you need detailed information from specific pages that search results don't provide enough detail about. The tool will crawl the pages, respect robots.txt, and return the full text content in markdown format.
 
 Workflow:
 1. Use searchWeb to find relevant pages for the user's question
 2. If the search results don't provide enough detail, use scrapePages to get the full content of the most relevant pages
 3. Provide comprehensive answers based on the scraped content, always citing sources with markdown links
+4. When discussing time-sensitive information, reference the current date and publication dates of sources
 
 Remember to use the searchWeb tool first, then scrapePages when you need more detailed information from specific pages.`,
         tools: {
@@ -122,6 +132,7 @@ Remember to use the searchWeb tool first, then scrapePages when you need more de
                 title: result.title,
                 link: result.link,
                 snippet: result.snippet,
+                date: result.date,
               }));
             },
           },
