@@ -1,7 +1,7 @@
 import { streamText, type Message, type TelemetrySettings } from "ai";
-import { model } from "~/model";
-import { searchSerper } from "~/serper";
-import { bulkCrawlWebsites } from "~/server/scraper";
+import { model } from "./model";
+import { searchSerper } from "./serper";
+import { bulkCrawlWebsites } from "./server/scraper";
 import { z } from "zod";
 
 export const streamFromDeepSearch = (opts: {

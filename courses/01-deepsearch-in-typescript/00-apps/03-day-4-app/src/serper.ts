@@ -1,4 +1,4 @@
-import { cacheWithRedis } from "~/server/redis/redis";
+import { cacheWithRedis } from "./server/redis/redis";
 import { env } from "./env.js";
 
 export declare namespace SerperTool {
