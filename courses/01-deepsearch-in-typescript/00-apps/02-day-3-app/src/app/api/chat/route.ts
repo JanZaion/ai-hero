@@ -7,6 +7,7 @@ import {
 import { model } from "~/model";
 import { auth } from "~/server/auth";
 import { searchSerper } from "~/serper";
+import { bulkCrawlWebsites } from "~/scraper";
 import { z } from "zod";
 import { upsertChat } from "~/server/db/queries";
 import { eq } from "drizzle-orm";
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
             langfuseTraceId: trace.id,
           },
         },
-        system: `You are a helpful AI assistant with access to real-time web search capabilities. When answering questions:
+        system: `You are a helpful AI assistant with access to real-time web search and web scraping capabilities. When answering questions:
 
 1. Always search the web for up-to-date information when relevant
 2. ALWAYS format URLs as markdown links using the format [title](url)
@@ -96,7 +97,16 @@ export async function POST(request: Request) {
 5. When providing information, always include the source where you found it using markdown links
 6. Never include raw URLs - always use markdown link format
 
-Remember to use the searchWeb tool whenever you need to find current information.`,
+Available tools:
+- searchWeb: Use this to search for current information on the web. Returns search results with titles, links, and snippets.
+- scrapePages: Use this to extract the full content of web pages. This is useful when you need detailed information from specific pages that search results don't provide enough detail about. The tool will crawl the pages, respect robots.txt, and return the full text content in markdown format.
+
+Workflow:
+1. Use searchWeb to find relevant pages for the user's question
+2. If the search results don't provide enough detail, use scrapePages to get the full content of the most relevant pages
+3. Provide comprehensive answers based on the scraped content, always citing sources with markdown links
+
+Remember to use the searchWeb tool first, then scrapePages when you need more detailed information from specific pages.`,
         tools: {
           searchWeb: {
             parameters: z.object({
@@ -113,6 +123,38 @@ Remember to use the searchWeb tool whenever you need to find current information
                 link: result.link,
                 snippet: result.snippet,
               }));
+            },
+          },
+          scrapePages: {
+            parameters: z.object({
+              urls: z
+                .array(z.string())
+                .describe(
+                  "Array of URLs to scrape and extract full content from",
+                ),
+            }),
+            execute: async ({ urls }, { abortSignal }) => {
+              const result = await bulkCrawlWebsites({ urls });
+
+              if (result.success) {
+                return result.results.map(({ url, result: crawlResult }) => ({
+                  url,
+                  content: crawlResult.data,
+                }));
+              } else {
+                return {
+                  error: result.error,
+                  results: result.results.map(
+                    ({ url, result: crawlResult }) => ({
+                      url,
+                      success: crawlResult.success,
+                      content: crawlResult.success
+                        ? crawlResult.data
+                        : crawlResult.error,
+                    }),
+                  ),
+                };
+              }
             },
           },
         },
