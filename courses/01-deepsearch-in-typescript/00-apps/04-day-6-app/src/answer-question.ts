@@ -19,6 +19,19 @@ export async function answerQuestion(
 Your goal is to answer the user's question: "${userQuestion}"
 
 ${
+  context.getConversationHistory()
+    ? `
+CONVERSATION HISTORY:
+${context.getConversationHistory()}
+
+CURRENT QUESTION: "${userQuestion}"
+
+Note: Consider the conversation context when answering. If this is a follow-up question (like "that's not working", "what about...", etc.), make sure to reference the previous conversation and provide relevant context in your answer.
+`
+    : ""
+}
+
+${
   isFinal
     ? "IMPORTANT: We may not have all the information we need to answer the question completely, but we need to make our best effort based on the available information. Be honest about any limitations or uncertainties."
     : "You have comprehensive information from multiple sources. Provide a detailed and accurate answer."
@@ -31,6 +44,7 @@ Guidelines:
 - Never include raw URLs - always use markdown link format
 - When users ask for up-to-date information, use the current date to provide context about how recent the information is
 - If you're unsure about something, acknowledge the uncertainty
+- Consider the conversation history to provide contextually relevant answers
 
 Current context from web searches and scraped content:
 

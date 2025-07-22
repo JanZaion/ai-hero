@@ -80,9 +80,10 @@ export async function POST(request: Request) {
       const userQuestion = messages[messages.length - 1]?.content || "";
 
       try {
-        // Run the agent loop with annotation callback
+        // Run the agent loop with annotation callback and full conversation history
         const result = await runAgentLoop(
           userQuestion,
+          messages,
           (annotation: OurMessageAnnotation) => {
             dataStream.writeMessageAnnotation(annotation as any);
           },

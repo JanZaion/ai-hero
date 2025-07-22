@@ -7,6 +7,7 @@ import {
   type OurMessageAnnotation,
 } from "~/system-context";
 import { answerQuestion } from "./answer-question";
+import type { Message } from "ai";
 
 // Copy of the search function from deep-search.ts
 async function searchWeb(query: string) {
@@ -46,10 +47,22 @@ async function scrapeUrl(urls: string[]) {
 
 export async function runAgentLoop(
   userQuestion: string,
+  conversationHistory: Message[],
   writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void,
 ): Promise<string> {
   // A persistent container for the state of our system
   const ctx = new SystemContext();
+  // Convert Message format to simple format for SystemContext
+  const simpleHistory = conversationHistory.map((msg) => ({
+    role: msg.role,
+    content:
+      typeof msg.content === "string"
+        ? msg.content
+        : msg.parts
+            ?.map((part) => (part.type === "text" ? part.text : ""))
+            .join("") || "",
+  }));
+  ctx.setConversationHistory(simpleHistory);
 
   // A loop that continues until we have an answer
   // or we've taken 10 actions

@@ -88,6 +88,11 @@ export class SystemContext {
    */
   private scrapeHistory: ScrapeResult[] = [];
 
+  /**
+   * The conversation history
+   */
+  private conversationHistory: Array<{ role: string; content: string }> = [];
+
   shouldStop() {
     return this.step >= 10;
   }
@@ -131,6 +136,23 @@ export class SystemContext {
       )
       .join("\n\n");
   }
+
+  setConversationHistory(history: Array<{ role: string; content: string }>) {
+    this.conversationHistory = history;
+  }
+
+  getConversationHistory(): string {
+    if (this.conversationHistory.length === 0) {
+      return "";
+    }
+
+    return this.conversationHistory
+      .map(
+        (msg) =>
+          `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}`,
+      )
+      .join("\n\n");
+  }
 }
 
 export const getNextAction = async (
@@ -145,6 +167,19 @@ You are a helpful AI assistant with access to real-time web search capabilities.
 
 Your goal is to help answer the user's question: "${userQuestion}"
 
+${
+  context.getConversationHistory()
+    ? `
+CONVERSATION HISTORY:
+${context.getConversationHistory()}
+
+CURRENT QUESTION: "${userQuestion}"
+
+Note: Consider the conversation context when interpreting the current question. Follow-up questions like "that's not working" or "what about..." should be understood in the context of the previous conversation.
+`
+    : ""
+}
+
 You have three possible actions:
 1. 'search' - Search the web for more information
 2. 'scrape' - Scrape specific URLs to get detailed content
@@ -157,6 +192,7 @@ Guidelines:
 - Prioritize official sources and authoritative websites
 - Only answer when you have comprehensive information from multiple sources
 - If you're unsure about something, search or scrape more sources to verify
+- Consider the conversation history to understand the context of follow-up questions
 
 Current context:
 
