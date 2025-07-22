@@ -1,5 +1,9 @@
 import type { Message } from "ai";
-import { createDataStreamResponse, appendResponseMessages } from "ai";
+import {
+  createDataStreamResponse,
+  appendResponseMessages,
+  streamText,
+} from "ai";
 import { auth } from "~/server/auth";
 import { upsertChat } from "~/server/db/queries";
 import { eq } from "drizzle-orm";
@@ -7,7 +11,9 @@ import { db } from "~/server/db";
 import { chats } from "~/server/db/schema";
 import { Langfuse } from "langfuse";
 import { env } from "~/env";
-import { streamFromDeepSearch } from "~/deep-search";
+import { runAgentLoop } from "~/run-agent-loop";
+import type { OurMessageAnnotation } from "~/system-context";
+import { model } from "~/model";
 
 const langfuse = new Langfuse({
   environment: env.NODE_ENV,
@@ -70,40 +76,60 @@ export async function POST(request: Request) {
         });
       }
 
-      const result = streamFromDeepSearch({
-        messages,
-        onFinish: async ({ response }) => {
-          // Merge the existing messages with the response messages
-          const updatedMessages = appendResponseMessages({
-            messages,
-            responseMessages: response.messages,
-          });
+      // Get the user's question from the latest message
+      const userQuestion = messages[messages.length - 1]?.content || "";
 
-          const lastMessage = messages[messages.length - 1];
-          if (!lastMessage) {
-            return;
-          }
+      try {
+        // Run the agent loop with annotation callback
+        const result = await runAgentLoop(
+          userQuestion,
+          (annotation: OurMessageAnnotation) => {
+            dataStream.writeMessageAnnotation(annotation as any);
+          },
+        );
 
-          // Save the complete chat history
+        // Stream the final answer
+        const streamResult = streamText({
+          model,
+          prompt: result,
+        });
+
+        streamResult.mergeIntoDataStream(dataStream);
+
+        // Wait for the stream to complete
+        await streamResult.text;
+
+        // Save the complete chat history
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage) {
           await upsertChat({
             userId: session.user.id,
             chatId: currentChatId,
             title: lastMessage.content.slice(0, 50) + "...",
-            messages: updatedMessages,
+            messages: [
+              ...messages,
+              {
+                id: crypto.randomUUID(),
+                role: "assistant" as const,
+                content: result,
+              },
+            ],
           });
+        }
 
-          await langfuse.flushAsync();
-        },
-        telemetry: {
-          isEnabled: true,
-          functionId: `agent`,
-          metadata: {
-            langfuseTraceId: trace.id,
-          },
-        },
-      });
+        await langfuse.flushAsync();
+      } catch (error) {
+        console.error("Error in agent loop:", error);
 
-      result.mergeIntoDataStream(dataStream);
+        // Stream an error message
+        const errorResult = streamText({
+          model,
+          prompt:
+            "I apologize, but I encountered an error while processing your request. Please try again.",
+        });
+
+        errorResult.mergeIntoDataStream(dataStream);
+      }
     },
     onError: (e) => {
       console.error(e);

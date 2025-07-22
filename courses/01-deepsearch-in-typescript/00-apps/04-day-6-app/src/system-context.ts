@@ -2,6 +2,11 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { model } from "~/model";
 
+export type OurMessageAnnotation = {
+  type: "NEW_ACTION";
+  action: Action;
+};
+
 type QueryResultSearchResult = {
   date: string;
   title: string;
@@ -20,22 +25,34 @@ type ScrapeResult = {
 };
 
 export interface SearchAction {
+  title: string;
+  reasoning: string;
   type: "search";
   query: string;
 }
 
 export interface ScrapeAction {
+  title: string;
+  reasoning: string;
   type: "scrape";
   urls: string[];
 }
 
 export interface AnswerAction {
+  title: string;
+  reasoning: string;
   type: "answer";
 }
 
 export type Action = SearchAction | ScrapeAction | AnswerAction;
 
 export const actionSchema = z.object({
+  title: z
+    .string()
+    .describe(
+      "The title of the action, to be displayed in the UI. Be extremely concise. 'Searching Saka's injury history', 'Checking HMRC industrial action', 'Comparing toaster ovens'",
+    ),
+  reasoning: z.string().describe("The reason you chose this step."),
   type: z.enum(["search", "scrape", "answer"]).describe(
     `The type of action to take.
       - 'search': Search the web for more information.

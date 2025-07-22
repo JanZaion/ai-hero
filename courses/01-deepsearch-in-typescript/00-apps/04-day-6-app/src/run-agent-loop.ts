@@ -1,6 +1,11 @@
 import { searchSerper } from "~/serper";
 import { bulkCrawlWebsites } from "~/server/scraper";
-import { SystemContext, getNextAction, type Action } from "~/system-context";
+import {
+  SystemContext,
+  getNextAction,
+  type Action,
+  type OurMessageAnnotation,
+} from "~/system-context";
 import { answerQuestion } from "./answer-question";
 
 // Copy of the search function from deep-search.ts
@@ -39,7 +44,10 @@ async function scrapeUrl(urls: string[]) {
   };
 }
 
-export async function runAgentLoop(userQuestion: string): Promise<string> {
+export async function runAgentLoop(
+  userQuestion: string,
+  writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void,
+): Promise<string> {
   // A persistent container for the state of our system
   const ctx = new SystemContext();
 
@@ -48,6 +56,14 @@ export async function runAgentLoop(userQuestion: string): Promise<string> {
   while (!ctx.shouldStop()) {
     // We choose the next action based on the state of our system
     const nextAction = await getNextAction(ctx, userQuestion);
+
+    // Send annotation about the action we're taking
+    if (writeMessageAnnotation) {
+      writeMessageAnnotation({
+        type: "NEW_ACTION",
+        action: nextAction,
+      } satisfies OurMessageAnnotation);
+    }
 
     // We execute the action and update the state of our system
     if (nextAction.type === "search") {

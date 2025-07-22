@@ -1,6 +1,6 @@
 import type { Message } from "ai";
 import { evalite } from "evalite";
-import { askDeepSearch } from "~/deep-search";
+import { runAgentLoop } from "~/run-agent-loop";
 import { Factuality } from "~/factuality-scorer";
 
 evalite.experimental_skip("Deep Search Eval", {
@@ -33,14 +33,7 @@ Development and Build Performance: Improved build times and Faster Fast Refresh.
     ];
   },
   task: async (input) => {
-    const messages: Message[] = [
-      {
-        id: "1",
-        role: "user",
-        content: input,
-      },
-    ];
-    return askDeepSearch(messages);
+    return runAgentLoop(input, () => {}); // no-op function for writeMessageAnnotation
   },
   scorers: [
     {

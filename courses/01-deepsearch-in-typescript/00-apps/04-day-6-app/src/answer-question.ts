@@ -1,6 +1,7 @@
-import { generateText } from "ai";
+import { streamText, smoothStream } from "ai";
 import { model } from "~/model";
 import { SystemContext } from "~/system-context";
+import { markdownJoinerTransform } from "~/markdown-joiner-transform";
 
 interface AnswerOptions {
   isFinal: boolean;
@@ -39,10 +40,23 @@ ${context.getScrapeHistory()}
 
 Based on the above information, provide a comprehensive answer to the user's question.`;
 
-  const result = await generateText({
+  const result = await streamText({
     model,
     prompt: systemPrompt,
+    experimental_transform: [
+      markdownJoinerTransform(),
+      smoothStream({
+        delayInMs: 20,
+        chunking: "line",
+      }),
+    ],
   });
 
-  return result.text;
+  // Convert the stream to a complete text response
+  let fullText = "";
+  for await (const chunk of result.textStream) {
+    fullText += chunk;
+  }
+
+  return fullText;
 }
